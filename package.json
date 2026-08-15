@@ -1,5 +1,5 @@
 {
-  "name": "@haibala/dsh-remote-web-ui",
+  "name": "@haibala/dsh-extensions-remotelink",
   "description": "Haibala mobile remote control for the DeepSeek Harness web GUI: scan-to-pair QR, one-time tokens, and a phone surface at /m",
   "version": "0.3.0",
   "type": "module",
@@ -106,12 +106,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/haibara757/dsh-haibala-remote-web-ui.git"
+    "url": "git+https://github.com/haibala-aii/dsh-extensions-remotelink.git"
   },
   "bugs": {
-    "url": "https://github.com/haibara757/dsh-haibala-remote-web-ui/issues"
+    "url": "https://github.com/haibala-aii/dsh-extensions-remotelink/issues"
   },
-  "homepage": "https://github.com/haibara757/dsh-haibala-remote-web-ui#readme",
+  "homepage": "https://github.com/haibala-aii/dsh-extensions-remotelink#readme",
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",
