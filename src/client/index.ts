@@ -24,6 +24,12 @@ import { RemoteSettingsSection } from './RemoteSettingsSection.tsx'
 import { en, zh, type RemoteKey } from './locales.ts'
 import { PAIR_FAILED_MARKER, runPairBootFlow } from './deep-link.ts'
 import { sendHeartbeat } from './pair-api.ts'
+import {
+  alertTaskComplete,
+  requestTaskCompletePermission,
+  RunningIdleWatcher,
+  unlockTaskCompleteAudio,
+} from '../task-complete.ts'
 
 export type { RemoteEntryProps } from './RemoteEntry.tsx'
 export type { PanelState, RemotePanelProps } from './RemotePanel.tsx'
@@ -90,7 +96,7 @@ const REMOTE_WEB_UI_NS = 'remote-web-ui'
 const HEARTBEAT_INTERVAL_MS = 10_000
 
 /** Services required by this plugin. */
-export const inject = ['slots', 'locale', 'connection', 'settingsScope', 'remote']
+export const inject = ['slots', 'locale', 'connection', 'settingsScope', 'remote', 'sessions']
 
 /**
  * Register the remote-control surface.
@@ -182,6 +188,43 @@ export function apply(ctx: ClientContext): void {
   }
   settingsScope.subscribe(syncRuntime)
   syncRuntime()
+
+  // Task-complete chime + system notification. The first pointerdown unlocks
+  // Web Audio (browsers block it until a gesture) and asks for Notification
+  // permission. Running→idle edges come from the session list, which already
+  // folds host/session-status; reconnect resets the watcher so a list refresh
+  // does not burst.
+  ctx.effect(() => {
+    const watcher = new RunningIdleWatcher()
+    const notifyEnabled = (): boolean => {
+      const snapshot = settingsScope.getSnapshot()
+      if (snapshot.status !== 'ready') return true
+      return snapshot.value?.notifyOnComplete ?? true
+    }
+    const onList = (): void => {
+      const list = ctx.sessions.list.getSnapshot()
+      const idle = watcher.ingest(list.ids.flatMap((id) => {
+        const row = list.byId[id]
+        if (row === undefined) return []
+        return [{ sessionId: id, running: row.running, title: row.displayTitle }]
+      }))
+      if (!notifyEnabled()) return
+      for (const event of idle) alertTaskComplete(event.title)
+    }
+    onList()
+    const unsubList = ctx.sessions.list.subscribe(onList)
+    const unsubReset = ctx.on('connection/reset', () => { watcher.reset() })
+    const onGesture = (): void => {
+      unlockTaskCompleteAudio()
+      if (notifyEnabled()) void requestTaskCompletePermission()
+    }
+    window.addEventListener('pointerdown', onGesture, { once: true })
+    return () => {
+      unsubList()
+      unsubReset()
+      window.removeEventListener('pointerdown', onGesture)
+    }
+  }, 'remote-web-ui: task-complete alerts')
 
   // One-time failed-pair toast. The accept result lands asynchronously, so
   // the marker check is deferred past the accept round trip.

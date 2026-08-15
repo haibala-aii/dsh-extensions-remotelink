@@ -23,6 +23,10 @@ Restart `dsh web` after the add succeeds. This repository ships prebuilt `lib/`.
 
 The sidebar chip **正在远程操控** appears only while at least one paired phone is online.
 
+## Task-complete alerts
+
+When an agent goes idle after running, the desktop GUI and an open phone `/m` page play a short chime and show a system notification (after the browser grants permission). Settings → Remote → **任务完成提醒** toggles this on both sides. Keep `/m` open on the phone; Android Chrome can still banner while the tab is in the background. The notification body is the session title only — never an origin or path.
+
 ## Public access (own domain)
 
 Leave **自动公网隧道** off. Point a reverse proxy or named tunnel at `http://127.0.0.1:<port>`, then set **公网地址** to that origin, for example `https://dsh.example.com`. Save and refresh the QR; pick **公网地址**, not a LAN IP.

@@ -27,6 +27,8 @@ export interface RemoteSettings {
   publicBaseUrl?: string
   /** When on, the plugin runs its own Cloudflare quick tunnel automatically. */
   autoTunnel?: boolean
+  /** When on (default), chime and notify when an agent goes idle after running. */
+  notifyOnComplete?: boolean
 }
 
 /** What the remote-control card renders. */
@@ -47,6 +49,8 @@ export interface RemoteSettingsCardState extends CardShell {
   publicBaseUrl: CardFieldState
   /** Auto public tunnel switch. */
   autoTunnel: CardFieldState
+  /** Task-complete chime and system notification. */
+  notifyOnComplete: CardFieldState
 }
 
 /** The registration-side face the card's slot entry injects. */
@@ -73,6 +77,7 @@ export class RemoteSettingsCardController {
       booleanField('requirePairingForLan'),
       textField('publicBaseUrl'),
       booleanField('autoTunnel'),
+      booleanField('notifyOnComplete'),
     ])
     this.store = this.form.bind(() => this.projection())
   }
@@ -88,6 +93,7 @@ export class RemoteSettingsCardController {
       requirePairingForLan: this.form.field('requirePairingForLan'),
       publicBaseUrl: this.form.field('publicBaseUrl'),
       autoTunnel: this.form.field('autoTunnel'),
+      notifyOnComplete: this.form.field('notifyOnComplete'),
     }
   }
 
@@ -214,6 +220,18 @@ export function RemoteSettingsCard(props: RemoteSettingsCardProps) {
         {...state.autoTunnel}
         onEdit={(text) => { props.edit('autoTunnel', text) }}
         onReset={() => { props.resetField('autoTunnel') }}
+      />
+      <BooleanField
+        id="settings-remote-notify-complete"
+        label={t('settings.notifyOnComplete')}
+        hint={t('settings.notifyOnCompleteHint')}
+        inheritLabel={t('settings.inherit')}
+        onLabel={t('settings.on')}
+        offLabel={t('settings.off')}
+        {...fieldProps}
+        {...state.notifyOnComplete}
+        onEdit={(text) => { props.edit('notifyOnComplete', text) }}
+        onReset={() => { props.resetField('notifyOnComplete') }}
       />
     </PluginSettingsCard>
   )

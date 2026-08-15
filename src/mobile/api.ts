@@ -78,6 +78,18 @@ export async function prompt(sessionId: string, text: string): Promise<void> {
   })
 }
 
+/** Live task-complete switch from the host settings (defaults on if the call fails). */
+export async function notifyPrefs(): Promise<{ notifyOnComplete: boolean }> {
+  try {
+    const response = await fetch('/m/api/notify-prefs')
+    if (!response.ok) return { notifyOnComplete: true }
+    const body = await response.json() as { notifyOnComplete?: unknown }
+    return { notifyOnComplete: body.notifyOnComplete !== false }
+  } catch {
+    return { notifyOnComplete: true }
+  }
+}
+
 /** Send one slash command line (e.g. `/permission workspace-write`). */
 export async function sendCommand(sessionId: string, line: string): Promise<unknown> {
   return await callUnary<unknown>('session.prompt', {

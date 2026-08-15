@@ -77,6 +77,43 @@ body {
   overflow: hidden;
 }
 
+.mobile-notify-banner {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: calc(env(safe-area-inset-top, 0px) + 8px) 12px 8px;
+  background: var(--m-card, #fff);
+  border-bottom: 1px solid var(--m-border);
+  font-size: 14px;
+  color: var(--m-text);
+}
+
+.mobile-notify-banner span {
+  flex: 1;
+}
+
+.mobile-notify-allow {
+  border: none;
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: var(--m-accent, #3b82f6);
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.mobile-notify-dismiss {
+  border: none;
+  background: transparent;
+  color: var(--m-muted, #6b7280);
+  font-size: 20px;
+  line-height: 1;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+}
+
 /* ── header ─────────────────────────────────────────────────────────── */
 
 .mobile-header {

@@ -7,12 +7,20 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { WorkspaceView as WorkspaceRow } from '@deepseek-ai/dsh-host-apiproxy/api/workspace'
-import { history as fetchHistory, listSessions, listWorkspaces, prompt } from '../api.ts'
+import { history as fetchHistory, listSessions, listWorkspaces, notifyPrefs, prompt } from '../api.ts'
 import { MuxClient } from '../mux.ts'
+import { HostStatusClient } from '../host-status.ts'
 import { RpcCallError, RpcTransportError } from '../rpc.ts'
 import { ChatView } from './ChatView.tsx'
 import { SessionListView } from './SessionListView.tsx'
 import { WorkspaceView as WorkspaceRoster } from './WorkspaceView.tsx'
+import {
+  alertTaskComplete,
+  requestTaskCompletePermission,
+  RunningIdleWatcher,
+  taskCompletePermission,
+  unlockTaskCompleteAudio,
+} from '../../task-complete.ts'
 
 /** One navigation level. */
 type Route =
@@ -84,6 +92,8 @@ export function formatTime(epochMs: number): string {
 export function App() {
   const [route, setRoute] = useState<Route>({ kind: 'workspaces' })
   const muxRef = useRef<MuxClient | undefined>(undefined)
+  const [notifyOn, setNotifyOn] = useState(true)
+  const [askNotify, setAskNotify] = useState(false)
 
   // The mux stream lives for the page lifetime: session events keep the
   // open chat live, and reconnect is automatic.
@@ -92,6 +102,23 @@ export function App() {
     muxRef.current = mux
     mux.start()
     return () => { mux.stop() }
+  }, [])
+
+  useTaskCompleteAlerts(notifyOn)
+
+  useEffect(() => {
+    const pull = (): void => {
+      void notifyPrefs().then((prefs) => { setNotifyOn(prefs.notifyOnComplete) })
+    }
+    pull()
+    const timer = window.setInterval(pull, 30_000)
+    const onVis = (): void => { if (!document.hidden) pull() }
+    document.addEventListener('visibilitychange', onVis)
+    if (taskCompletePermission() === 'default') setAskNotify(true)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVis)
+    }
   }, [])
 
   // Keep the live-event client pointed at the session currently on screen so
@@ -115,6 +142,33 @@ export function App() {
 
   return (
     <div className="mobile">
+      {askNotify
+        ? (
+          <div className="mobile-notify-banner" role="status">
+            <span>任务完成时提醒我</span>
+            <button
+              type="button"
+              className="mobile-notify-allow"
+              onClick={() => {
+                unlockTaskCompleteAudio()
+                void requestTaskCompletePermission().then((permission) => {
+                  if (permission !== 'default') setAskNotify(false)
+                })
+              }}
+            >
+              开启
+            </button>
+            <button
+              type="button"
+              className="mobile-notify-dismiss"
+              aria-label="稍后"
+              onClick={() => { setAskNotify(false) }}
+            >
+              ×
+            </button>
+          </div>
+        )
+        : null}
       {route.kind === 'workspaces'
         ? <WorkspaceRoster onPick={(workspace) => { setRoute({ kind: 'sessions', workspace }) }} />
         : route.kind === 'sessions'
@@ -157,3 +211,45 @@ export function loadHistory(sessionId: string, beforeSeq?: number) {
 }
 
 export { listSessions, listWorkspaces, prompt }
+
+/**
+ * Watch host/session-status (SSE, with session.list fallback) and alert when
+ * a seeded running session goes idle. Prefs are read by the caller so a
+ * desktop toggle can mute the phone without remounting this effect.
+ * @param enabled - live notify switch.
+ */
+function useTaskCompleteAlerts(enabled: boolean): void {
+  const enabledRef = useRef(enabled)
+  enabledRef.current = enabled
+  useEffect(() => {
+    const watcher = new RunningIdleWatcher()
+    const host = new HostStatusClient()
+    let cancelled = false
+    const unsub = host.onFrame((frame) => {
+      const idle = watcher.ingest([{ sessionId: frame.sessionId, running: frame.running }])
+      if (!enabledRef.current) return
+      for (const event of idle) alertTaskComplete(event.title)
+    })
+    const start = (): void => { if (!cancelled) host.start() }
+    void listSessions().then(
+      (page) => {
+        if (cancelled) return
+        watcher.ingest(page.items.map(item => ({
+          sessionId: item.sessionId,
+          running: item.running,
+          title: toSessionView(item).title,
+        })))
+        start()
+      },
+      () => { start() },
+    )
+    const onGesture = (): void => { unlockTaskCompleteAudio() }
+    window.addEventListener('pointerdown', onGesture, { once: true })
+    return () => {
+      cancelled = true
+      unsub()
+      host.stop()
+      window.removeEventListener('pointerdown', onGesture)
+    }
+  }, [])
+}

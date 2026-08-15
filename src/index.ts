@@ -98,6 +98,12 @@ export interface Config {
   autoTunnel?: boolean
   /** Master switch for the plugin (browser half + host pairing surfaces). */
   enabled?: boolean
+  /**
+   * When true (default), the desktop GUI and the phone `/m` page play a
+   * chime and show a system notification when an agent goes idle after
+   * running. The notification body is the session title only.
+   */
+  notifyOnComplete?: boolean
 }
 
 export const Config: z<Config> = z.object({
@@ -109,6 +115,7 @@ export const Config: z<Config> = z.object({
   publicBaseUrl: z.string(),
   autoTunnel: z.boolean().default(false),
   enabled: z.boolean().default(true),
+  notifyOnComplete: z.boolean().default(true),
 })
 
 /** Presence sweep cadence (a stale device flips to disconnected within two sweeps). */
@@ -131,6 +138,7 @@ const DEFAULTS: ResolvedConfig = {
   publicBaseUrl: undefined,
   autoTunnel: false,
   enabled: true,
+  notifyOnComplete: true,
 }
 
 /**
@@ -148,6 +156,7 @@ export function apply(ctx: Context, config?: Config): void {
     publicBaseUrl: config?.publicBaseUrl,
     autoTunnel: config?.autoTunnel ?? DEFAULTS.autoTunnel,
     enabled: config?.enabled ?? DEFAULTS.enabled,
+    notifyOnComplete: config?.notifyOnComplete ?? DEFAULTS.notifyOnComplete,
   }
   // The live source the pairing service and the gate read: the settings
   // section once the web settings surface is served, the composition entry
@@ -164,6 +173,7 @@ export function apply(ctx: Context, config?: Config): void {
       publicBaseUrl: value.publicBaseUrl,
       autoTunnel: value.autoTunnel ?? DEFAULTS.autoTunnel,
       enabled: value.enabled ?? DEFAULTS.enabled,
+      notifyOnComplete: value.notifyOnComplete ?? DEFAULTS.notifyOnComplete,
     }
   }
   const service = new PairingService({
@@ -267,7 +277,13 @@ export function apply(ctx: Context, config?: Config): void {
   const routes = [
     ...makeRoutes({ service, lanAddresses }),
     ...makeMobileRoutes(),
-    ...(apiProxy !== undefined ? makeMobileApiRoutes({ service, apiProxy }) : []),
+    ...(apiProxy !== undefined
+      ? makeMobileApiRoutes({
+        service,
+        apiProxy,
+        notifyOnComplete: () => resolve().notifyOnComplete,
+      })
+      : []),
     ...updateRoutes,
   ]
   const gate = makeGateListener(service, () => resolve().requirePairingForLan, () => resolve().enabled)

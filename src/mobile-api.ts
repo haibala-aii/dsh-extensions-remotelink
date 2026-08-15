@@ -69,11 +69,15 @@ export interface MobileApiDeps {
   service: PairingService
   /** The host ApiProxy service (injected by the plugin). */
   apiProxy: ApiProxy
+  /** Live task-complete notify switch (settings, default on). */
+  notifyOnComplete: () => boolean
 }
 
 /** Mobile API route paths. */
 export const MOBILE_API_PATHS = {
   events: '/m/api/events.mux',
+  host: '/m/api/events.host',
+  prefs: '/m/api/notify-prefs',
 } as const
 
 /** The mobile-api prefix (every other path under it is a method name). */
@@ -87,7 +91,7 @@ const MOBILE_API_METHOD_PREFIX = `${MOBILE_API_PREFIX}/`
  * @returns the routes to register on webServer.
  */
 export function makeMobileApiRoutes(deps: MobileApiDeps): WebRoute[] {
-  const { service, apiProxy } = deps
+  const { service, apiProxy, notifyOnComplete } = deps
 
   /** The phone gate: a live paired-device cookie, or nothing else proceeds. */
   const gateOk = (req: IncomingMessage): boolean => {
@@ -196,9 +200,76 @@ export function makeMobileApiRoutes(deps: MobileApiDeps): WebRoute[] {
     if (!closed) res.end()
   }
 
+  /** Bridge host/session-status over SSE (running bits for task-complete alerts). */
+  const handleHost = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
+    if (req.method !== 'GET') {
+      res.writeHead(405)
+      res.end()
+      return
+    }
+    if (!gateOk(req)) {
+      res.writeHead(403)
+      res.end('forbidden')
+      return
+    }
+    res.writeHead(200, {
+      'content-type': 'text/event-stream; charset=utf-8',
+      'cache-control': 'no-cache',
+      connection: 'keep-alive',
+    })
+    const controller = new AbortController()
+    let closed = false
+    const heartbeat = setInterval(() => {
+      if (closed) return
+      try {
+        res.write(': ping\n\n')
+      } catch {
+        // The write failed; the close handler tears the subscription down.
+      }
+    }, 15_000)
+    const onClose = (): void => {
+      if (closed) return
+      closed = true
+      controller.abort()
+      clearInterval(heartbeat)
+    }
+    res.on('close', onClose)
+    req.on('close', onClose)
+    try {
+      const frames = apiProxy.events.host({ rpcId: RpcId(`mobile-host-${Date.now().toString(36)}`), payload: {} }, controller.signal)
+      for await (const frame of frames) {
+        if (closed) break
+        if (frame.payload.type !== 'host/session-status') continue
+        res.write(`data: ${JSON.stringify(frame)}\n\n`)
+      }
+    } catch {
+      // The stream ended or errored; the EventSource reconnects.
+    } finally {
+      controller.abort()
+      clearInterval(heartbeat)
+    }
+    if (!closed) res.end()
+  }
+
+  /** Pairing-gated notify preference (the desktop settings switch). */
+  const handlePrefs = (req: IncomingMessage, res: ServerResponse): void => {
+    if (req.method !== 'GET') {
+      res.writeHead(405)
+      res.end()
+      return
+    }
+    if (!gateOk(req)) {
+      writeJson(res, 403, { ok: false, error: { code: 'unpaired', message: 'mobile session is not paired' } })
+      return
+    }
+    writeJson(res, 200, { notifyOnComplete: notifyOnComplete() })
+  }
+
   return [
     { kind: 'prefix', path: MOBILE_API_PREFIX, handler: handleMethod },
     { kind: 'exact', path: MOBILE_API_PATHS.events, handler: handleEvents },
+    { kind: 'exact', path: MOBILE_API_PATHS.host, handler: handleHost },
+    { kind: 'exact', path: MOBILE_API_PATHS.prefs, handler: handlePrefs },
   ]
 }
 
