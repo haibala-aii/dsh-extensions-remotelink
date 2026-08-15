@@ -1,4 +1,4 @@
-# @haibala/dsh-extensions-remotelink
+# @haibala-aii/dsh-extensions-remotelink
 
 English | [中文](README.zh.md)
 
