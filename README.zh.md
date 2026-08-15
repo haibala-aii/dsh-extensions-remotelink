@@ -1,4 +1,4 @@
-# @haibala/dsh-remote-web-ui
+# @haibala/dsh-extensions-remotelink
 
 [English](README.md) | 中文
 
@@ -9,7 +9,7 @@ Haibala 的 DeepSeek Harness Web 移动端远程控制：电脑生成一次性�
 ## 安装
 
 ```sh
-dsh plugin --profile web add github:haibara757/dsh-haibala-remote-web-ui
+dsh plugin --profile web add github:haibala-aii/dsh-extensions-remotelink
 ```
 
 添加成功后重启 `dsh web`。仓库带预构建 `lib/`。
