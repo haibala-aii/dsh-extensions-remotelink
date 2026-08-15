@@ -31,6 +31,26 @@ import {
   unlockTaskCompleteAudio,
 } from '../task-complete.ts'
 
+// Safety net for plain-http LAN origins: the web UI calls crypto.randomUUID
+// for client RPC/draft ids, but that API only exists in secure contexts. The
+// host also injects this polyfill into index.html; this module-level copy
+// covers cached/old index responses too.
+if (typeof crypto !== 'undefined' && typeof crypto.randomUUID !== 'function') {
+  try {
+    const cryptoObject = crypto as unknown as { randomUUID?: () => string }
+    cryptoObject.randomUUID = () => {
+      const bytes = crypto.getRandomValues(new Uint8Array(16))
+      bytes[6] = (bytes[6] & 0x0f) | 0x40
+      bytes[8] = (bytes[8] & 0x3f) | 0x80
+      const hex = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
+      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+    }
+  } catch {
+    // If the Crypto object is non-extensible, the index.html polyfill is the
+    // authoritative fallback.
+  }
+}
+
 export type { RemoteEntryProps } from './RemoteEntry.tsx'
 export type { PanelState, RemotePanelProps } from './RemotePanel.tsx'
 export type { PairFailedNoticeProps } from './PairFailedNotice.tsx'
@@ -103,6 +123,29 @@ export const inject = ['slots', 'locale', 'connection', 'settingsScope', 'remote
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
+  // Small-screen overrides for the shared web UI. The desktop app already
+  // collapses its sidebar/details on narrow viewports; these tweaks reduce
+  // padding and enlarge touch targets so the same UI is usable on a phone.
+  ctx.effect(() => {
+    const style = document.createElement('style')
+    style.dataset.plugin = 'remote-web-ui/mobile-overrides'
+    style.textContent = `
+      @media (max-width: 640px) {
+        [class*="handle"] { display: none !important; }
+        [class*="composerSeat"], [class*="scrollBody"], [class*="header"] {
+          padding-left: 10px !important;
+          padding-right: 10px !important;
+        }
+        [class*="chatMsg"] { max-width: 92% !important; }
+        [class*="row"], [class*="navItem"], [class*="iconButton"] {
+          touch-action: manipulation;
+        }
+      }
+    `
+    document.head.appendChild(style)
+    return () => { style.remove() }
+  }, 'remote-web-ui: mobile web overrides')
+
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'remote-web-ui: dictionaries')
 
   const t = ctx.locale.bind(NS)
@@ -230,12 +273,13 @@ export function apply(ctx: ClientContext): void {
   // the marker check is deferred past the accept round trip.
   ctx.effect(() => {
     const timer = window.setTimeout(() => {
-      if (sessionStorage.getItem(PAIR_FAILED_MARKER) === null) return
+      const code = sessionStorage.getItem(PAIR_FAILED_MARKER)
+      if (code === null) return
       sessionStorage.removeItem(PAIR_FAILED_MARKER)
       const mount = document.createElement('div')
       document.body.appendChild(mount)
       const root = createRoot(mount)
-      root.render(createElement(PairFailedNotice, { t }))
+      root.render(createElement(PairFailedNotice, { t, code }))
       // The toast owns its dismissal; the root lives for the page lifetime.
       void root
     }, 1500)

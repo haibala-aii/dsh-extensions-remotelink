@@ -1,5 +1,5 @@
 /**
- * Task-complete alerts for the desktop web GUI and the phone `/m` page.
+ * Task-complete alerts for the desktop web GUI and open phone pages.
  * Watches agent running→idle edges and plays a short chime plus an optional
  * Notification. Copy never includes origins, URLs, or filesystem paths.
  */

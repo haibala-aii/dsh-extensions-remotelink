@@ -1,6 +1,6 @@
 /**
- * Remote update support for the dsh-web-ui family — host half. Detects the
- * installed aggregate package (@haibala-aii/dsh-web-ui-all) and its family
+ * Remote update support for the dsh-extensions family — host half. Detects the
+ * installed aggregate package (@haibala-aii/dsh-extensions) and its family
  * children, probes the npm registry for newer releases, and runs the actual
  * update as `pnpm update` inside the owning dsh profile directory.
  *
@@ -16,11 +16,11 @@ import { spawn } from 'node:child_process'
 /** npm registry base used for version probes. */
 export const NPM_REGISTRY = 'https://registry.npmjs.org'
 
-/** The family scope every dsh-web-ui package is published under. */
+/** The family scope every dsh-extensions package is published under. */
 export const FAMILY_SCOPE = '@haibala-aii/'
 
 /** The aggregate package that is the canonical update entry point. */
-export const AGGREGATE_PACKAGE = '@haibala-aii/dsh-web-ui-all'
+export const AGGREGATE_PACKAGE = '@haibala-aii/dsh-extensions'
 
 /** Fallback anchor: this plugin's own package when the aggregate is absent. */
 export const SELF_PACKAGE = '@haibala-aii/dsh-extensions-remotelink'

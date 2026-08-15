@@ -265,10 +265,20 @@ export function makeRoutes(deps: PairRoutesDeps): WebRoute[] {
   const handleAccept = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     if (!requireMethod(req, res, 'POST')) return
     if (!lanFence(req)) {
+      console.warn('remote-web-ui: accept rejected by fence', {
+        host: req.headers.host,
+        origin: req.headers.origin,
+        remoteAddress: (req.socket as { remoteAddress?: string } | undefined)?.remoteAddress,
+        publicBaseUrl: service.publicBaseUrl,
+        lanAddresses: service.lanAddresses,
+      })
       writeJson(res, 403, { ok: false, code: 'forbidden' })
       return
     }
     if (rateLimitAccept(req)) {
+      console.warn('remote-web-ui: accept rate-limited', {
+        remoteAddress: (req.socket as { remoteAddress?: string } | undefined)?.remoteAddress,
+      })
       writeJson(res, 429, { ok: false, code: 'rate-limited' })
       return
     }
@@ -276,6 +286,13 @@ export function makeRoutes(deps: PairRoutesDeps): WebRoute[] {
     const token = typeof body?.token === 'string' ? body.token : ''
     const result = service.accept(token)
     if (!result.ok) {
+      console.warn('remote-web-ui: accept refused', {
+        code: result.code,
+        tokenPrefix: token.slice(0, 4),
+        tokenLength: token.length,
+        host: req.headers.host,
+        remoteAddress: (req.socket as { remoteAddress?: string } | undefined)?.remoteAddress,
+      })
       writeJson(res, result.code === 'used' ? 409 : 404, { ok: false, code: result.code })
       return
     }

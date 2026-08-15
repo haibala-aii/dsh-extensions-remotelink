@@ -18,8 +18,6 @@ import type {} from '@deepseek-ai/dsh-host-webserver'
 import { PairingService } from './pairing.ts'
 import { makeGateListener } from './gate.ts'
 import { isTrustedApiRequest, makeRoutes } from './routes.ts'
-import { makeMobileRoutes } from './mobile-routes.ts'
-import { makeMobileApiRoutes } from './mobile-api.ts'
 import { lanIPv4Addresses } from './lan.ts'
 import { TunnelManager, type TunnelInfo } from './tunnel.ts'
 import {
@@ -53,7 +51,7 @@ declare module '@deepseek-ai/cordis' {
 export const name = 'remote-web-ui'
 
 /** Services required before the pairing surfaces can mount. */
-export const inject = ['webServer', 'apiProxy']
+export const inject = ['webServer']
 
 /**
  * Settings namespace of the remote-control capability — the section the web
@@ -99,7 +97,7 @@ export interface Config {
   /** Master switch for the plugin (browser half + host pairing surfaces). */
   enabled?: boolean
   /**
-   * When true (default), the desktop GUI and the phone `/m` page play a
+   * When true (default), the desktop GUI and an open phone page play a
    * chime and show a system notification when an agent goes idle after
    * running. The notification body is the session title only.
    */
@@ -183,12 +181,23 @@ export function apply(ctx: Context, config?: Config): void {
     cookieName: resolved.cookieName,
   })
 
+  // ── crypto.randomUUID polyfill ──────────────────────────────────────────
+  // The web UI uses crypto.randomUUID for client RPC ids and draft ids. That
+  // API only exists in secure contexts, so a phone opening the LAN QR over
+  // plain http (192.168.x.x) would crash with "crypto.randomUUID is not a
+  // function". Inject a tiny v4 fallback into index.html before any app
+  // module runs, so LAN pairing works on phones too.
+  ctx.effect(() => ctx.webServer.tapIndex(html => {
+    const polyfill = '<script>(function(){try{if(window.crypto&&typeof window.crypto.randomUUID!=="function"){window.crypto.randomUUID=function(){var b=window.crypto.getRandomValues(new Uint8Array(16));b[6]=(b[6]&15)|64;b[8]=(b[8]&63)|128;var h="";for(var i=0;i<16;i++)h+=(b[i]<16?"0":"")+b[i].toString(16);return h.slice(0,8)+"-"+h.slice(8,12)+"-"+h.slice(12,16)+"-"+h.slice(16,20)+"-"+h.slice(20)}}}catch(e){}})();</script>'
+    return html.includes('</head>') ? html.replace('</head>', `${polyfill}</head>`) : `${polyfill}${html}`
+  }), 'remote-web-ui: crypto.randomUUID polyfill')
+
   // ── auto tunnel ─────────────────────────────────────────────────────────
   // The minted public URL becomes the QR base (and the pairing fence's
-  // trusted host). Phone /api traffic rides the plugin's own /m/api channel,
-  // which is NOT subject to the connection trust fence — so no fence
-  // mutation is needed here (a distributable plugin must not change the
-  // harness's connection plugin).
+  // trusted host). Phone traffic after pairing rides the normal /api channel,
+  // which is already gated by the connection plugin's trust fence — so no
+  // fence mutation is needed here (a distributable plugin must not change
+  // the harness's connection plugin).
   const tunnel = new TunnelManager()
   let autoTunnel = resolved.autoTunnel
   tunnel.onPhase((info: TunnelInfo) => {
@@ -229,12 +238,6 @@ export function apply(ctx: Context, config?: Config): void {
   // (now vetoing every non-loopback request) instead of opening the fence.
   let disposeRoutes: (() => void) | undefined
   let disposeSweep: (() => void) | undefined
-  // The phone's data channel: pairing routes + the /m page + the /m/api
-  // proxy (which needs the host ApiProxy service; the plugin injects it).
-  const apiProxy = ctx.get('apiProxy')
-  if (apiProxy === undefined) {
-    console.warn('remote-web-ui: apiProxy service unavailable — the mobile data channel is disabled')
-  }
   // ── remote update ────────────────────────────────────────────────────────
   // The dsh-web-ui self-update surface: probe the npm registry for family
   // releases and run `pnpm update` in the owning profile. Resolutions anchor
@@ -276,14 +279,6 @@ export function apply(ctx: Context, config?: Config): void {
   })
   const routes = [
     ...makeRoutes({ service, lanAddresses }),
-    ...makeMobileRoutes(),
-    ...(apiProxy !== undefined
-      ? makeMobileApiRoutes({
-        service,
-        apiProxy,
-        notifyOnComplete: () => resolve().notifyOnComplete,
-      })
-      : []),
     ...updateRoutes,
   ]
   const gate = makeGateListener(service, () => resolve().requirePairingForLan, () => resolve().enabled)

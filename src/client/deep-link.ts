@@ -51,12 +51,6 @@ export const browserPage: PageSurface = {
   },
 }
 
-/** Whether this browser looks like a phone/tablet (the simplified mobile surface). */
-export function isMobileSurface(): boolean {
-  if (typeof navigator === 'undefined') return false
-  return /Android|iPhone|iPad|iPod|Mobile|mobile/i.test(navigator.userAgent)
-}
-
 /**
  * Run the pair/workspace boot flow for this page load.
  * @param ctx - client root context (workspaces/sessions read at need time).
@@ -77,23 +71,44 @@ export function runPairBootFlow(ctx: Context, search: string, page: PageSurface 
 /** Accept the token, then reload (the workspace param survives the reload). */
 async function runAccept(token: string, page: PageSurface): Promise<void> {
   let ok = false
+  let failureCode: string | undefined
   try {
     const result = await acceptPair(token)
     ok = result.ok
-    if (!ok) sessionStorage.setItem(PAIR_FAILED_MARKER, 'failed')
+    if (!ok) {
+      // A duplicate/old QR should not kick an already-paired phone back to
+      // an error page: if this device still has a live pair cookie, treat
+      // the scan as a no-op and reload the web UI as usual.
+      if (await hasLivePairCookie()) ok = true
+      else failureCode = result.code
+    }
   } catch {
-    sessionStorage.setItem(PAIR_FAILED_MARKER, 'failed')
+    // Network failures are not recoverable from a re-check; keep the error.
+    failureCode = 'network'
   }
+  if (failureCode !== undefined) sessionStorage.setItem(PAIR_FAILED_MARKER, failureCode)
   // Drop the token from the URL either way: an accepted token is consumed
   // (a re-scan would 409), and a failed one must not loop.
   const url = new URL(page.href)
   url.searchParams.delete('pair')
   page.replaceState(`${url.pathname}${url.search}${url.hash}`)
   if (ok) {
-    // Phones land on the standalone simplified surface (the full desktop UI
-    // is not built for small screens); desktops stay on the full UI.
-    if (isMobileSurface()) page.navigate('/m')
-    else page.reload()
+    // After accepting, reload the same web UI on every device. The desktop
+    // web app already collapses its sidebar/details on small viewports, so a
+    // phone uses the normal DSH web UI instead of a separate mobile surface.
+    page.reload()
+  }
+}
+
+/** Whether this browser already holds a live paired-device cookie. */
+async function hasLivePairCookie(): Promise<boolean> {
+  try {
+    const response = await fetch('/api/pair/status')
+    if (!response.ok) return false
+    const body: { ok?: boolean; paired?: boolean } = await response.json() as { ok?: boolean; paired?: boolean }
+    return body.ok === true && body.paired === true
+  } catch {
+    return false
   }
 }
 

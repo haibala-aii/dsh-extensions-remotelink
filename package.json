@@ -1,6 +1,6 @@
 {
   "name": "@haibala-aii/dsh-extensions-remotelink",
-  "description": "Haibala mobile remote control for the DeepSeek Harness web GUI: scan-to-pair QR, one-time tokens, and a phone surface at /m",
+  "description": "Haibala mobile remote control for the DeepSeek Harness web GUI: scan-to-pair QR and one-time tokens for the responsive web UI",
   "version": "0.3.0",
   "type": "module",
   "engines": {

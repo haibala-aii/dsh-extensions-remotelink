@@ -341,8 +341,11 @@ export class PairingService {
     if (this.lanBases.size === 0 && this.publicBase === undefined) return 'lan-required'
     if (this.stopped) return 'stopped'
     if (onlineCount > 0) return 'connected'
-    if (this.devices.size > 0) return 'disconnected'
+    // A live QR is the primary signal on the pairing panel: before the phone
+    // pairs, the panel should say "waiting", not "paired devices offline"
+    // just because this process has seen a device in an earlier session.
     if (hasToken) return 'waiting'
+    if (this.devices.size > 0) return 'disconnected'
     return 'stopped'
   }
 
