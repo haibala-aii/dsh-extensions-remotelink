@@ -7,4 +7,4 @@
 
 - insert:
     - id: remote-web-ui
-      name: '@haibala/dsh-remote-web-ui'
+      name: '@haibala-aii/dsh-extensions-remotelink'
