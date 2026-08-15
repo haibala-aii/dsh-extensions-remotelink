@@ -1,13 +1,13 @@
 /**
- * Package-owned invariant companion for `@haibala/dsh-remote-web-ui`.
- * @module @haibala/dsh-remote-web-ui/invariant
+ * Package-owned invariant companion for `@haibala-aii/dsh-extensions-remotelink`.
+ * @module @haibala-aii/dsh-extensions-remotelink/invariant
  */
 
 /* jscpd:ignore-start */
 import type { Context } from '@deepseek-ai/cordis'
 import type { InvariantInstaller } from '@deepseek-ai/dsh-invariants'
 
-const PACKAGE_NAME = '@haibala/dsh-remote-web-ui'
+const PACKAGE_NAME = '@haibala-aii/dsh-extensions-remotelink'
 
 /** Cordis companion plugin name. */
 export const name = 'remote-web-ui-invariant'
