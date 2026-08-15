@@ -21,13 +21,14 @@ import { FooterRemoteEntry } from './FooterRemoteEntry.tsx'
 import { PairFailedNotice } from './PairFailedNotice.tsx'
 import { RemoteSettingsCard, RemoteSettingsCardController, type RemoteSettings } from './RemoteSettingsCard.tsx'
 import { RemoteSettingsSection } from './RemoteSettingsSection.tsx'
+import { TaskCompleteToast } from './TaskCompleteToast.tsx'
 import { en, zh, type RemoteKey } from './locales.ts'
 import { PAIR_FAILED_MARKER, runPairBootFlow } from './deep-link.ts'
 import { sendHeartbeat } from './pair-api.ts'
 import {
   alertTaskComplete,
   requestTaskCompletePermission,
-  RunningIdleWatcher,
+  TurnCompleteWatcher,
   unlockTaskCompleteAudio,
 } from '../task-complete.ts'
 
@@ -49,6 +50,20 @@ if (typeof crypto !== 'undefined' && typeof crypto.randomUUID !== 'function') {
     // If the Crypto object is non-extensible, the index.html polyfill is the
     // authoritative fallback.
   }
+}
+
+/** Show a non-blocking in-app toast that a task completed. */
+function showTaskCompleteToast(title: string): void {
+  const mount = document.createElement('div')
+  document.body.appendChild(mount)
+  const root = createRoot(mount)
+  root.render(createElement(TaskCompleteToast, {
+    title,
+    onDone: () => {
+      root.unmount()
+      mount.remove()
+    },
+  }))
 }
 
 export type { RemoteEntryProps } from './RemoteEntry.tsx'
@@ -232,30 +247,52 @@ export function apply(ctx: ClientContext): void {
   settingsScope.subscribe(syncRuntime)
   syncRuntime()
 
-  // Task-complete chime + system notification. The first pointerdown unlocks
-  // Web Audio (browsers block it until a gesture) and asks for Notification
-  // permission. Running→idle edges come from the session list, which already
-  // folds host/session-status; reconnect resets the watcher so a list refresh
-  // does not burst.
+  // Task-complete chime + system notification + in-app toast. The first
+  // pointerdown unlocks Web Audio (browsers block it until a gesture) and
+  // asks for Notification permission. We watch the live mux stream for
+  // `turn/end` events, so EVERY completed task notifies — not only when the
+  // whole session finally goes idle.
   ctx.effect(() => {
-    const watcher = new RunningIdleWatcher()
+    const watcher = new TurnCompleteWatcher()
     const notifyEnabled = (): boolean => {
       const snapshot = settingsScope.getSnapshot()
       if (snapshot.status !== 'ready') return true
       return snapshot.value?.notifyOnComplete ?? true
     }
-    const onList = (): void => {
+    const titleOf = (sessionId: string): string => {
       const list = ctx.sessions.list.getSnapshot()
-      const idle = watcher.ingest(list.ids.flatMap((id) => {
-        const row = list.byId[id]
-        if (row === undefined) return []
-        return [{ sessionId: id, running: row.running, title: row.displayTitle }]
-      }))
-      if (!notifyEnabled()) return
-      for (const event of idle) alertTaskComplete(event.title)
+      const row = list.byId[sessionId]
+      return row === undefined ? '' : row.displayTitle ?? ''
     }
-    onList()
-    const unsubList = ctx.sessions.list.subscribe(onList)
+    const controller = new AbortController()
+    let stopped = false
+    const pump = async (): Promise<void> => {
+      while (!stopped) {
+        const connection = ctx.get('connection') as ConnectionHandle | undefined
+        if (connection === undefined) {
+          await new Promise(resolve => setTimeout(resolve, 2000))
+          continue
+        }
+        try {
+          const frames = connection.api.events.mux({}, controller.signal)
+          for await (const envelope of frames) {
+            const events = watcher.ingestFrame(envelope.payload)
+            if (events.length === 0) continue
+            for (const event of events) {
+              const title = titleOf(event.sessionId) || event.title
+              if (!notifyEnabled() || title === '') continue
+              alertTaskComplete(title)
+              showTaskCompleteToast(title)
+            }
+          }
+        } catch {
+          // Stream ended or transport error; reconnect below.
+        }
+        if (stopped) break
+        await new Promise(resolve => setTimeout(resolve, 2000))
+      }
+    }
+    void pump()
     const unsubReset = ctx.on('connection/reset', () => { watcher.reset() })
     const onGesture = (): void => {
       unlockTaskCompleteAudio()
@@ -263,7 +300,8 @@ export function apply(ctx: ClientContext): void {
     }
     window.addEventListener('pointerdown', onGesture, { once: true })
     return () => {
-      unsubList()
+      stopped = true
+      controller.abort()
       unsubReset()
       window.removeEventListener('pointerdown', onGesture)
     }

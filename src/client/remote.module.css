@@ -427,6 +427,55 @@
   font-size: 13px;
 }
 
+/* Task-complete toast: fixed top-center, success tone, auto-dismisses. */
+.taskToast {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  max-width: min(420px, calc(100vw - 32px));
+  box-sizing: border-box;
+  padding: 12px 16px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-2);
+  box-shadow: var(--dsw-shadow-lv3);
+  animation: task-toast-in 180ms ease;
+}
+
+@keyframes task-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.taskToastTitle {
+  margin: 0;
+  color: var(--dsw-alias-state-success-primary, var(--dsw-alias-label-primary));
+  font-weight: 600;
+}
+
+.taskToastDetail {
+  margin: 4px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .taskToast {
+    animation: none;
+  }
+}
+
 /* Multi-homed address picker: one radio per constructible LAN literal. */
 .addresses {
   margin: 12px 0 0;

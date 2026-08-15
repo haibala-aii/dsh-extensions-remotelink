@@ -60,6 +60,56 @@ export class RunningIdleWatcher {
   }
 }
 
+/**
+ * Watches the live mux stream for per-turn completions. A `turn/end` with
+ * reason `completed` means ONE agent task finished, even when the session
+ * itself stays running for more queued work — that is the signal the UI
+ * should notify on for each completed task.
+ */
+export class TurnCompleteWatcher {
+  private readonly titles = new Map<string, string>()
+  private readonly seen = new Set<string>()
+
+  /** Forget all remembered titles/seen turn keys (call on connection reset). */
+  reset(): void {
+    this.titles.clear()
+    this.seen.clear()
+  }
+
+  /** Remember a session title for notification copy. */
+  setTitle(sessionId: string, title: string): void {
+    if (title !== '') this.titles.set(sessionId, title)
+  }
+
+  /**
+   * Fold one mux frame.
+   * @param frame - a mux payload (duck-typed; unknown shapes are ignored).
+   * @returns tasks that just completed (one event per turn/end completed).
+   */
+  ingestFrame(frame: unknown): IdleEvent[] {
+    if (typeof frame !== 'object' || frame === null) return []
+    const candidate = frame as {
+      type?: unknown
+      sessionId?: unknown
+      event?: { type?: unknown; data?: { turn?: unknown; reason?: { kind?: unknown } } }
+    }
+    if (candidate.type !== 'session/event' || typeof candidate.sessionId !== 'string') return []
+    const event = candidate.event
+    if (event === undefined || event.type !== 'turn/end') return []
+    const turn = event.data?.turn
+    if (typeof turn !== 'number') return []
+    if (event.data?.reason?.kind !== 'completed') return []
+    const sessionId = candidate.sessionId
+    const key = `${sessionId}:${turn}`
+    if (this.seen.has(key)) return []
+    this.seen.add(key)
+    return [{
+      sessionId,
+      title: this.titles.get(sessionId) ?? FALLBACK_SESSION_TITLE,
+    }]
+  }
+}
+
 const NOTIFY_TITLE = '任务已完成'
 const NOTIFY_TAG = 'dsh-task-complete'
 
