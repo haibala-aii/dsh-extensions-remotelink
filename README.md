@@ -1,4 +1,4 @@
-# @haibala/dsh-remote-web-ui
+# @haibala/dsh-extensions-remotelink
 
 English | [中文](README.zh.md)
 
@@ -9,7 +9,7 @@ This is a fork of [`@linxin666/dsh-remote-web-ui`](https://github.com/zhu1090093
 ## Install
 
 ```sh
-dsh plugin --profile web add github:haibara757/dsh-haibala-remote-web-ui
+dsh plugin --profile web add github:haibala-aii/dsh-extensions-remotelink
 ```
 
 Restart `dsh web` after the add succeeds. This repository ships prebuilt `lib/`.
