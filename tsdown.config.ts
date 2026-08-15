@@ -8,13 +8,13 @@ const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
 const requireFromWeb = createRequire(resolve(repoRoot, 'apps/web/package.json'))
 
 const configs = clientBundle(
-  '@haibala/dsh-remote-web-ui',
+  '@haibala-aii/dsh-extensions-remotelink',
   ['src/index.ts', 'src/invariant.ts'],
 )({ env: {} })
 
 /** Standalone phone page: inline every dependency (no ModuleLoader, no import map). */
 const mobile: UserConfig = {
-  name: '@haibala/dsh-remote-web-ui/mobile',
+  name: '@haibala-aii/dsh-extensions-remotelink/mobile',
   entry: { mobile: 'src/mobile/index.tsx' },
   outDir: 'lib',
   format: 'esm',
